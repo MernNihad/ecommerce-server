@@ -4,17 +4,19 @@ import mongoose from "mongoose";
 import { AdminModel } from "./models/Admin.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { ProductModel } from "./models/Product.js";
 
 const app = express();
 app.use(cors());
 // parse requests of content-type - application/json
 app.use(express.json());
 
-const mongooseConnection = () => {
+const mongooseConnection =async () => {
   try {
-    const db_conn = mongoose.connect("mongodb://localhost:27017/ecommerce");
-  } catch (error) {
+    const db_conn = await mongoose.connect("mongodb://localhost:27017/ecommerce");
     console.log("connected...");
+  } catch (error) {
+    console.log(error.message)
   }
 };
 
@@ -128,6 +130,78 @@ app.get("/api/v1/admin/profile", async (req, res) => {
     return res.status(404).json({ message: "User Not Found" });
   }
   return res.status(200).send({ message: "profile", data: { user: isUser } });
+});
+
+app.post("/api/v1/admin/product/add-product", async (req, res) => {
+  try {
+    if (!req.headers.authorization) {
+      return res.status(401).json({ message: "No Token Provided" });
+    }
+
+    var token = req.headers.authorization;
+
+    var decoded = jwt.verify(token, "example");
+
+    if (!decoded) {
+      return res.status(401).json({ message: "Unauthorized Access" });
+    }
+
+    const { name, price, description, ImageLink } = req.body;
+
+    if (!name) {
+      return res.status(400).send({ message: "Name is required" });
+    }
+
+    if (!price) {
+      return res.status(400).send({ message: "Pisce is required" });
+    }
+    if (!description) {
+      return res.status(400).send({ message: "description is required" });
+    }
+
+    if (!ImageLink) {
+      return res.status(400).send({ message: "ImageLink is required" });
+    }
+
+    const dat = new ProductModel({
+        description:req.body.description,
+        imageLink:'',
+        name:req.body.name,
+        price:req.body.price
+    })
+    console.log(dat);
+
+    const isMailExist = await AdminModel.findOne({ email: req.body.email });
+
+    console.log(isMailExist);
+    if (isMailExist) {
+      // const isMatchPassword = await bcrypt.compare(req.body.password, isMailExist.password);
+      let isMatchPassword = bcrypt.compareSync(
+        req.body.password,
+        isMailExist.password
+      );
+
+      console.log(isMatchPassword);
+      if (!isMatchPassword) {
+        return res.status(401).send({ message: "Invalid Password!" });
+      } else {
+        // create token
+        const token = jwt.sign({ _id: isMailExist._id }, "example", {
+          expiresIn: "3h",
+        });
+
+        return res
+          .status(200)
+          .send({ message: "User logged", data: { token, user: isMailExist } });
+      }
+    } else {
+      return res.status(409).send({ message: "User not exist." });
+    }
+  } catch (error) {
+    return res
+      .status(400)
+      .send({ message: error.message || "internal server error" });
+  }
 });
 
 app.listen(8080, () => {
